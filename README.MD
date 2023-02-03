@@ -1,3 +1,3 @@
-# My Awesome Game
+# Megalaga  
 
-This is My Awesome 16 Bit Cartridge game for mega Drive
+Juego space shooter para Mega Drive
