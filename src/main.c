@@ -3,8 +3,12 @@
 
 #define LEFT_EDGE 0
 #define RIGHT_EDGE 320
+#define BOTTOM_EDGE 224
+
 #define ANIM_STRAIGHT 0
 #define ANIM_MOVE 1
+
+#define SHOT_INTERVAL 120
 
 typedef struct {
 	int x;
@@ -23,17 +27,26 @@ Entity player = {0, 0, 16, 16, 0, 0, 0, NULL, "PLAYER" };
 Entity enemies[MAX_ENEMIES];
 u16 enemiesLeft = 0;
 u16 bulletsOnScreen = 0;
+u16 shotTicker = 0;
 
-#define MAX_BULLETS	3
+#define MAX_BULLETS 6
+#define MAX_PLAYER_BULLETS 3
+u16 shotByPlayer = 0;
 Entity bullets[MAX_BULLETS];
+
+int score = 0;
+char hud_string[40] = "";
 
 void killEntity(Entity* e);
 void reviveEntity(Entity* e);
 void positionEnemies();
 void positionPlayer();
 void myJoyHandler( u16 joy, u16 changed, u16 state);
-void shootBullet();
+void shootBullet(Entity Shooter);
 void positionBullets();
+void handleCollisions();
+int collideEntities(Entity* a, Entity* b);
+void updateScoreDisplay();
 
 int main(bool hard)
 {
@@ -92,7 +105,8 @@ int main(bool hard)
         sprintf(b->name, "Bu%d",i);
         b++;
     }
-
+    updateScoreDisplay();
+    
     while(1)
     {
         VDP_setVerticalScroll(BG_B,offset -= 2);
@@ -100,6 +114,7 @@ int main(bool hard)
         positionPlayer();
         positionBullets();
         positionEnemies();
+        handleCollisions();
         SPR_update();
         SYS_doVBlankProcess();
     }
@@ -117,12 +132,18 @@ void reviveEntity(Entity* e){
 }
 
 void positionEnemies(){
+    shotTicker++;
     u16 i = 0;
     for(i = 0; i < MAX_ENEMIES; i++){
         Entity* e = &enemies[i];
         if(e->health > 0){
             e->x += e->velx;
             SPR_setPosition(e->sprite,e->x,e->y);
+            /*Shooting*/
+            if(shotTicker >= SHOT_INTERVAL){
+                shootBullet(*e);
+                shotTicker = 0;
+            }
             if( (e->x+e->w) > RIGHT_EDGE){
                 e->velx = -1;
             }
@@ -169,22 +190,33 @@ void myJoyHandler( u16 joy, u16 changed, u16 state)
         }
         if (state & BUTTON_B & changed)
         {
-            shootBullet();
+            shootBullet(player);
         }
     }
 }
 
-void shootBullet(){
+void shootBullet(Entity Shooter){
+    bool fromPlayer = (Shooter.y > 100);
     if(bulletsOnScreen < MAX_BULLETS){
+        if(fromPlayer == TRUE){
+            if(shotByPlayer >= MAX_PLAYER_BULLETS){
+                return;
+            }
+        }
         Entity* b;
         u16 i = 0;
         for(i=0; i<MAX_BULLETS; i++){
             b = &bullets[i];
             if(b->health == 0){
-                b->x = player.x+4;
-                b->y = player.y;
+                b->x = Shooter.x+4;
+                b->y = Shooter.y;
                 reviveEntity(b);
-                b->vely = -3;
+                if(fromPlayer == TRUE){
+                    b->vely = -3;
+                    shotByPlayer++;
+                } else{
+                    b->vely = 3;
+                }
                 SPR_setPosition(b->sprite,b->x,b->y);
                 bulletsOnScreen++;
                 break;
@@ -203,9 +235,63 @@ void positionBullets(){
             if(b->y + b->h < 0){
                 killEntity(b);
                 bulletsOnScreen--;
+                shotByPlayer--;
+            } else if(b->y > BOTTOM_EDGE){
+                killEntity(b);
+                bulletsOnScreen--;
             } else{
                 SPR_setPosition(b->sprite,b->x,b->y);
             }
         }
     }
+}
+
+void handleCollisions(){
+    Entity* b;
+    Entity* e;
+    int i = 0;
+    int j = 0;
+    for(i = 0; i < MAX_BULLETS; i++){
+        b = &bullets[i];
+        if(b->health > 0){
+            if(b->vely < 0){
+                for(i = 0; i < MAX_BULLETS; i++){
+                    b = &bullets[i];
+                    if(b->health > 0){
+                        for(j = 0; j < MAX_ENEMIES; j++){
+                            e = &enemies[j];
+                            if(e->health > 0){
+                                if(collideEntities( b, e )){
+                                    killEntity(e);
+                                    killEntity(b);
+                                    enemiesLeft--;
+                                    bulletsOnScreen--;
+                                    shotByPlayer--;
+                                    score += 10;
+                                    updateScoreDisplay();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else {
+                if(collideEntities(b,&player)){
+                    killEntity(&player);
+                }
+            }
+        }
+    }
+}
+
+int collideEntities(Entity* a, Entity* b)
+{
+    return (a->x < b->x + b->w && a->x + a->w > b->x && a->y < b->y + b->h && a->y + a->h >= b->y);
+}
+
+void updateScoreDisplay(){
+    sprintf(hud_string,"SCORE: %d - LEFT: %d",score,enemiesLeft);
+    VDP_clearText(0,0,40);
+    VDP_drawText(hud_string,0,0);
 }
