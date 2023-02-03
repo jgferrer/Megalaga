@@ -1,0 +1,12 @@
+{ 
+    "C_Cpp.default.includePath": ["${env:GDK}\\inc",
+    "${env:GDK}\\res",
+    "res",
+    "inc"
+],
+"custom-makefile": "d:/sgdk/makefile.gen",
+"GDK": "d:/sgdk",
+"files.associations": {
+    "genesis.h": "c"
+}
+}
